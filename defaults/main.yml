@@ -1,0 +1,83 @@
+---
+# -------------
+# Restic Backup
+# -------------
+
+# @var restic_backup_jobs_username:description: Username to run the backup jog
+restic_backup_jobs_username: "administrator"
+# @var restic_backup_jobs_password:description: Password to run the backup job
+restic_backup_jobs_password: "SomePassword1345"
+
+# @var restic_backup_jobs_install_path:description: Path to store scripts
+restic_backup_jobs_install_path: '{{ ansible_env.ProgramFiles }}\restic_jobs'
+
+# @var restic_backup_jobs:description: Job definition
+# @var restic_backup_jobs:example: >
+# restic_backup_jobs:
+#   - name: "dfs"
+#     description: "dfs files"
+#     dirs:
+#       - 'C:\test1'
+#     excludes:
+#       - Caches
+#       - Dbg*
+#       - Tempfile.txt
+#       - _temp
+#       - '*.tmp'
+#     triggers:
+#       - type: daily
+#         start_boundary: '2017-10-09T23:30:00'
+#     username: '{{ restic_backup_jobs_username }}'
+#     password: '{{ restic_backup_jobs_password }}'
+#     state: present
+#     enabled: no
+#     retention:
+#       keep_last: 1
+#       # keep_hourly: 1
+#       keep_daily: 7
+#       keep_weekly: 4
+#       # keep_monthly: 6
+#       # keep_yearly
+# @end
+restic_backup_jobs: []
+
+# @var restic_backup_jobs_enable:description: >
+# Enable restic backup
+# @end
+restic_backup_jobs_enable: false
+
+# @var restic_backup_jobs_s3_endpoint:description: Minio S3 endpoint for restic backup storage
+# @var restic_backup_jobs_s3_endpoint:example: >
+# backup__base__restic_s3_endpoint: "https://minio.{{ dns_domain }}"
+# restic_backup_jobs_s3_endpoint: "{{ backup__base__restic_s3_endpoint }}"
+# @end
+restic_backup_jobs_s3_endpoint: "{{ backup__base__restic_s3_endpoint }}"
+
+# @var restic_backup_jobs_s3_bucket_name:description: >
+# Minio S3 bucket name for restic backup storage.
+# @end
+restic_backup_jobs_s3_bucket_name: "restic-{{ inventory_hostname }}"
+
+# @var restic_backup_jobs_s3_repo:description: >
+# Minio S3 repo URL for restic backup storage.
+# @end
+restic_backup_jobs_s3_repo: "s3:{{ restic_backup_jobs_s3_endpoint }}/{{ restic_backup_jobs_s3_bucket_name }}"
+
+# @var restic_backup_jobs_s3_repo_password:description: >
+# Minio S3 repo password for restic backup storage.
+# @end
+restic_backup_jobs_s3_repo_password: "{{ backup__base__restic_s3_repo_password }}"
+
+# @var restic_backup_jobs_s3_repo_access_key:description: >
+# Minio S3 repo access key for restic backup storage.
+# @end
+restic_backup_jobs_s3_repo_access_key: "{{ backup__base__restic_s3_repo_access_key }}"
+
+# @var restic_backup_jobs_s3_repo_secret_key:description: >
+# Minio S3 repo secret key for restic backup storage.
+# @end
+restic_backup_jobs_s3_repo_secret_key: "{{ backup__base__restic_s3_repo_secret_key }}"
+
+# restic_backup_jobs_s3_seed_repo: "s3:{{ desasterrecovery__base__restic_s3_seed_endpoint }}/{{ restic_backup_jobs_s3_bucket_name }}"
+# restic_backup_jobs_s3_seed_repo_password: "{{ desasterrecovery__base__restic_s3_repo_password }}"
+...

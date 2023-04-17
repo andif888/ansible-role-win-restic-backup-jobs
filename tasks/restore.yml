@@ -1,0 +1,41 @@
+---
+- name: Restore
+  ansible.windows.win_shell: |
+    $env:RESTIC_REPOSITORY = '{{ restic_backup_jobs_s3_repo }}'
+    $env:AWS_ACCESS_KEY_ID = '{{ restic_backup_jobs_s3_repo_access_key }}'
+    $env:AWS_SECRET_ACCESS_KEY = '{{ restic_backup_jobs_s3_repo_secret_key }}'
+    $env:RESTIC_PASSWORD = '{{ restic_backup_jobs_s3_repo_password }}'
+    {% if item.dirs is defined %}
+    {% if item.dirs | length > 0 %}
+    {% for dir in item.dirs %}
+    restic -v restore {{ restic_restore_snapshot | default('latest') }} `
+    --target "{{ dir }}_restored" `
+    --include '/{{ dir[:1] }}/{{ dir[3:]|replace("\\","/") }}' `
+    --path "{{ dir }}"
+
+    if (Test-Path -LiteralPath "{{ dir }}") {
+      Rename-Item "{{ dir }}" "{{ dir }}.old" 
+    }
+
+    $restoredPath = '{{ dir }}_restored\{{ dir[:1] }}\{{ dir[3:] }}'
+    $folderPath = '{{ dir }}'
+    Move-Item $restoredPath $folderPath
+
+    if (Test-Path -LiteralPath "{{ dir }}_restored") {
+      Remove-Item "{{ dir }}_restored" -Force -Recurse
+    }
+    
+    if (Test-Path -LiteralPath "{{ dir }}.old") {
+      Remove-Item "{{ dir }}.old" -Force -Recurse
+    }
+    {% endfor %}
+    {% endif %}
+    {% endif %}
+  register: restore_result
+  loop: "{{ restic_backup_jobs }}"
+
+- name: Restore - debug
+  ansible.builtin.debug:
+    msg: '{{ item.stdout }}'
+  loop: "{{ restore_result.results }}"
+...

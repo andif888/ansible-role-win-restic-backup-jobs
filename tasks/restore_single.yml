@@ -1,0 +1,24 @@
+---
+- name: Restore_single
+  ansible.windows.win_shell: |
+    $env:RESTIC_REPOSITORY = '{{ restic_backup_jobs_s3_repo }}'
+    $env:AWS_ACCESS_KEY_ID = '{{ restic_backup_jobs_s3_repo_access_key }}'
+    $env:AWS_SECRET_ACCESS_KEY = '{{ restic_backup_jobs_s3_repo_secret_key }}'
+    $env:RESTIC_PASSWORD = '{{ restic_backup_jobs_s3_repo_password }}'
+    restic -v restore {{ restic_restore_snapshot | default('latest') }} `
+    --target "{{ restic_restore_target }}" `
+    --include "{{ restic_restore_include }}" `
+    --tag "{{ restic_restore_tag }}"
+  register: restore_result
+  when:
+    - restic_restore_target is defined
+    - restic_restore_target | length > 0
+    - restic_restore_include is defined
+    - restic_restore_include | length > 0
+    - restic_restore_tag is defined
+    - restic_restore_tag | length > 0
+
+- name: Restore_single debug
+  ansible.builtin.debug:
+    msg: '{{ restore_result.stdout }}'
+...

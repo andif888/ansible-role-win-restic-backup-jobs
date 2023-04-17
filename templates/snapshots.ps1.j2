@@ -1,0 +1,6 @@
+$env:RESTIC_REPOSITORY = '{{ restic_backup_jobs_s3_repo }}'
+$env:AWS_ACCESS_KEY_ID = '{{ restic_backup_jobs_s3_repo_access_key }}'
+$env:AWS_SECRET_ACCESS_KEY = '{{ restic_backup_jobs_s3_repo_secret_key }}'
+$env:RESTIC_PASSWORD = '{{ restic_backup_jobs_s3_repo_password }}'
+
+restic snapshots --tag "{{ item.name }}"

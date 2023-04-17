@@ -1,0 +1,47 @@
+---
+- name: Backup 
+  ansible.windows.win_shell: |
+    $env:RESTIC_REPOSITORY = '{{ restic_backup_jobs_s3_repo }}'
+    $env:AWS_ACCESS_KEY_ID = '{{ restic_backup_jobs_s3_repo_access_key }}'
+    $env:AWS_SECRET_ACCESS_KEY = '{{ restic_backup_jobs_s3_repo_secret_key }}'
+    $env:RESTIC_PASSWORD = '{{ restic_backup_jobs_s3_repo_password }}'
+    {% if item.dirs is defined %}
+    {% if item.dirs | length > 0 %}
+    restic -v backup `
+    --use-fs-snapshot `
+    --tag "{{ item.name }}"{% for dir in item.dirs %} "{{ dir }}"{% endfor %}{% if item.excludes is defined %}{% for exclude in item.excludes %} --exclude "{{ exclude }}"{% endfor %}{% endif %}
+    {% endif %}
+    {% endif %}
+  register: backup_result
+  loop: "{{ restic_backup_jobs }}"
+
+- name: Debug backup_result
+  ansible.builtin.debug:
+    msg: '{{ item.stdout }}'
+  loop: "{{ backup_result.results }}"
+
+- name: Backup_retention
+  ansible.windows.win_shell: |
+    $env:RESTIC_REPOSITORY = '{{ restic_backup_jobs_s3_repo }}'
+    $env:AWS_ACCESS_KEY_ID = '{{ restic_backup_jobs_s3_repo_access_key }}'
+    $env:AWS_SECRET_ACCESS_KEY = '{{ restic_backup_jobs_s3_repo_secret_key }}'
+    $env:RESTIC_PASSWORD = '{{ restic_backup_jobs_s3_repo_password }}'
+    {% if item.retention is defined %}
+    restic -v forget `
+    --tag "{{ item.name }}"{% if item.retention.keep_last is defined %} `
+    --keep-last {{ item.retention.keep_last }}{% endif %}{% if item.retention.keep_hourly is defined %} `
+    --keep-hourly {{ item.retention.keep_hourly }}{% endif %}{% if item.retention.keep_daily is defined %} `
+    --keep-daily {{ item.retention.keep_daily }}{% endif %}{% if item.retention.keep_weekly is defined %} `
+    --keep-weekly {{ item.retention.keep_weekly }}{% endif %}{% if item.retention.keep_monthly is defined %} `
+    --keep-monthly {{ item.retention.keep_monthly }}{% endif %}{% if item.retention.keep_yearly is defined %} `
+    --keep-yearly {{ item.retention.keep_yearly }}{% endif %} `
+    --prune
+    {% endif %}
+  register: retention_result
+  loop: "{{ restic_backup_jobs }}"
+
+- name: Debug retention_result
+  ansible.builtin.debug:
+    msg: '{{ item.stdout }}'
+  loop: "{{ retention_result.results }}"
+...

@@ -1,0 +1,40 @@
+---
+# @tag restore-restic-single:description: Run single item restore if restic is enabled.
+- ansible.builtin.import_tasks: "{{ role_path }}/tasks/restore_single.yml"
+  tags:
+    - never
+    - restore-restic-single
+  when:
+    - restic_backup_jobs_enable
+
+# @tag restore-restic:description: Run restore if restic is enabled.
+- ansible.builtin.import_tasks: "{{ role_path }}/tasks/restore.yml"
+  tags:
+    - never
+    - restore-restic
+  when:
+    - restic_backup_jobs_enable
+
+# @tag backup-init-restic:description: Init backup if restic is enabled.
+- ansible.builtin.import_tasks: "{{ role_path }}/tasks/backup_init.yml"
+  tags:
+    - backup-init-restic
+  when:
+    - restic_backup_jobs_enable
+
+# @tag backup-restic:description: Run backup if restic is enabled.
+- ansible.builtin.import_tasks: "{{ role_path }}/tasks/backup.yml"
+  tags:
+    - never
+    - backup-restic
+  when:
+    - restic_backup_jobs_enable
+
+# @tag backup-list-restic:description: List backups if restic is enabled.
+- ansible.builtin.import_tasks: "{{ role_path }}/tasks/backup_list.yml"
+  tags:
+    - never
+    - backup-list-restic
+  when:
+    - restic_backup_jobs_enable
+...

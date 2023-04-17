@@ -1,0 +1,160 @@
+---
+- name: Ensure restic_backup_jobs_install_path exists
+  win_file:
+    path: '{{ restic_backup_jobs_install_path }}'
+    state: directory
+
+- name: Backup_init - Ensure S3 bucket exists
+  ansible.windows.win_shell: |
+    mc.exe alias set localminio {{ restic_backup_jobs_s3_endpoint }} {{ restic_backup_jobs_s3_repo_access_key }} {{ restic_backup_jobs_s3_repo_secret_key }}
+    mc.exe mb --ignore-existing localminio/{{ restic_backup_jobs_s3_bucket_name }}     
+  register: mc_mb_result
+
+- name: Backup_init {{ restic_backup_jobs_s3_repo }}
+  ansible.builtin.debug:
+    msg: "{{ mc_mb_result.stdout }}"
+
+- name: Backup_init {{ restic_backup_jobs_s3_repo }} - Check repo exists
+  ansible.windows.win_shell: |
+    $env:RESTIC_REPOSITORY = '{{ restic_backup_jobs_s3_repo }}'
+    $env:AWS_ACCESS_KEY_ID = '{{ restic_backup_jobs_s3_repo_access_key }}'
+    $env:AWS_SECRET_ACCESS_KEY = '{{ restic_backup_jobs_s3_repo_secret_key }}'
+    $env:RESTIC_PASSWORD = '{{ restic_backup_jobs_s3_repo_password }}'
+    restic snapshots        
+  register: restic_snapshots
+  ignore_errors: true
+  changed_when: false
+
+- name: Backup_init {{ restic_backup_jobs_s3_repo }} - Init repo with seeding repo
+  ansible.windows.win_shell: |
+    $env:RESTIC_REPOSITORY = '{{ restic_backup_jobs_s3_repo }}'
+    $env:AWS_ACCESS_KEY_ID = '{{ restic_backup_jobs_s3_repo_access_key }}'
+    $env:AWS_SECRET_ACCESS_KEY = '{{ restic_backup_jobs_s3_repo_secret_key }}'
+    $env:RESTIC_PASSWORD = '{{ restic_backup_jobs_s3_repo_password }}'
+    $env:RESTIC_FROM_PASSWORD = '{{ restic_backup_jobs_s3_seed_repo_password }}'
+    $env:RESTIC_FROM_REPOSITORY = '{{ restic_backup_jobs_s3_seed_repo }}'
+    restic init --copy-chunker-params        
+  register: restic_init
+  when: 
+    - restic_snapshots.rc != 0
+    - restic_backup_jobs_s3_seed_repo is defined
+    - restic_backup_jobs_s3_seed_repo_password is defined
+
+- name: Backup_init {{ restic_backup_jobs_s3_repo }} - Seed repo with seeding repo
+  ansible.windows.win_shell: |
+    $env:RESTIC_REPOSITORY = '{{ restic_backup_jobs_s3_repo }}'
+    $env:AWS_ACCESS_KEY_ID = '{{ restic_backup_jobs_s3_repo_access_key }}'
+    $env:AWS_SECRET_ACCESS_KEY = '{{ restic_backup_jobs_s3_repo_secret_key }}'
+    $env:RESTIC_PASSWORD = '{{ restic_backup_jobs_s3_repo_password }}'
+    $env:RESTIC_FROM_PASSWORD = '{{ restic_backup_jobs_s3_seed_repo_password }}'
+    $env:RESTIC_FROM_REPOSITORY = '{{ restic_backup_jobs_s3_seed_repo }}'
+    restic copy       
+  register: restic_seeded
+  when: 
+    - restic_init is defined
+    - restic_backup_jobs_s3_seed_repo is defined
+    - restic_backup_jobs_s3_seed_repo_password is defined
+
+- name: Backup_init {{ restic_backup_jobs_s3_repo }} - Init empty repo
+  ansible.windows.win_shell: |
+    $env:RESTIC_REPOSITORY = '{{ restic_backup_jobs_s3_repo }}'
+    $env:AWS_ACCESS_KEY_ID = '{{ restic_backup_jobs_s3_repo_access_key }}'
+    $env:AWS_SECRET_ACCESS_KEY = '{{ restic_backup_jobs_s3_repo_secret_key }}'
+    $env:RESTIC_PASSWORD = '{{ restic_backup_jobs_s3_repo_password }}'
+    restic init        
+  register: restic_init_empty
+  when: 
+    - restic_snapshots.rc != 0
+    - (not restic_init is defined) or (restic_init.skipped)
+
+- name: Backup_init {{ restic_backup_jobs_s3_repo }} - restic_init
+  ansible.builtin.debug:
+    var: restic_init
+  when: restic_init is defined
+
+- name: Backup_init {{ restic_backup_jobs_s3_repo }} - restic_seeded
+  ansible.builtin.debug:
+    var: restic_seeded
+  when: restic_seeded is defined
+
+- name: Backup_init {{ restic_backup_jobs_s3_repo }} - restic_init_empty
+  ansible.builtin.debug:
+    var: restic_init_empty
+  when: restic_init_empty is defined
+
+- name: Backup_init {{ restic_backup_jobs_s3_repo }} - Seed time
+  ansible.builtin.debug:
+    msg: "Start {{ restic_seeded.start }} End {{ restic_seeded.end }} Delta {{ restic_seeded.delta }}"
+  when: 
+    - restic_seeded is defined
+    - restic_seeded.changed is defined
+    - restic_seeded.changed
+    - restic_seeded.delta is defined
+
+- name: Create List Snapshots Scripts
+  ansible.windows.win_template:
+    src: "templates/snapshots.ps1.j2"
+    dest: '{{ restic_backup_jobs_install_path }}\restic_listsnapshot_job_{{ item.name }}.ps1'
+  loop: "{{ restic_backup_jobs }}"
+  no_log: '{{ ansible_verbosity < 3 }}'
+
+- name: Create Backup Scripts
+  ansible.windows.win_template:
+    src: "templates/backupscript.ps1.j2"
+    dest: '{{ restic_backup_jobs_install_path }}\restic_backup_job_{{ item.name }}.ps1'
+  loop: "{{ restic_backup_jobs }}"
+  no_log: '{{ ansible_verbosity < 3 }}'
+
+- name: Create Restore Scripts
+  ansible.builtin.template:
+    src: "templates/restorescript.ps1.j2"
+    dest: '{{ restic_backup_jobs_install_path }}\restic_restore_job_{{ item.name }}.ps1'
+  loop: "{{ restic_backup_jobs }}"
+  no_log: '{{ ansible_verbosity < 3 }}'
+
+- name: Get local admin group name
+  ansible.windows.win_shell: |
+    $admins = ([System.Security.Principal.SecurityIdentifier]'S-1-5-32-544').Translate( [System.Security.Principal.NTAccount]).Value
+    write-host $admins
+  register: win_local_admin_group_name_result
+  changed_when: false
+
+- name: "Disable ACL Inheritance on {{ restic_backup_jobs_install_path }}"
+  ansible.windows.win_acl_inheritance:
+    path: '{{ restic_backup_jobs_install_path }}'
+    reorganize: no
+    state: absent
+
+- name: "Add ACL FullControl on {{ restic_backup_jobs_install_path }}"
+  ansible.windows.win_acl:
+    path: '{{ restic_backup_jobs_install_path }}'
+    user: "{{ item }}"
+    rights: FullControl
+    type: allow
+    state: present
+    propagation: 'None'
+  loop:
+    - "SYSTEM"
+    - "{{ win_local_admin_group_name_result.stdout | trim }}"
+    - "{{ restic_backup_jobs_username }}"
+
+- name: Create Task Scheduler Jobs
+  community.windows.win_scheduled_task:
+    name: 'restic_backup_job_{{ item.name }}'
+    description: '{{ item.description | default(item.name) }}'
+    author: 'ansible-restic'
+    actions:
+      - path: 'powershell.exe'
+        arguments: '-File "{{ restic_backup_jobs_install_path }}\restic_backup_job_{{ item.name }}.ps1"'
+    triggers: '{{ item.triggers }}'
+    username: '{{ item.username }}'
+    password: '{{ item.password }}'
+    logon_type: password
+    multiple_instances: 2
+    state: '{{ item.state | default("present") }}'
+    enabled: '{{ item.enabled | default(no) }}'
+    run_level: highest
+    execution_time_limit: PT6H
+  loop: "{{ restic_backup_jobs }}"
+  no_log: '{{ ansible_verbosity < 3 }}'
+...
